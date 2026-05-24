@@ -28,6 +28,22 @@ import json
 app = Flask(__name__)
 CORS(app)
 
+# ==================== RENDER DEPLOYMENT CONFIGURATION ====================
+# Get port from environment variable (Render sets this)
+PORT = int(os.environ.get('PORT', 5000))
+
+# Use Render disk or /tmp for file storage
+DATA_DIR = os.environ.get('DATA_DIR', '/tmp/xrp_scanner_data')
+LOG_FILE = os.path.join(DATA_DIR, 'logs/scanner_log.json')
+CSV_FILE = os.path.join(DATA_DIR, 'transactions.csv')
+CHECKPOINT_FILE = os.path.join(DATA_DIR, 'scan_checkpoint.json')
+LARGE_SCAN_DIR = os.path.join(DATA_DIR, 'large_scans')
+
+# Create directories
+os.makedirs(os.path.join(DATA_DIR, 'logs'), exist_ok=True)
+os.makedirs(LARGE_SCAN_DIR, exist_ok=True)
+# ===========================================================
+
 # Configuration
 XRP_RPC_URL = "https://s1.ripple.com:51234/"
 ALTERNATE_RPC_URLS = [
@@ -35,21 +51,12 @@ ALTERNATE_RPC_URLS = [
     "https://xrplcluster.com/",
     "https://xrpl.ws/"
 ]
-LOG_FILE = "logs/scanner_log.json"
-CSV_FILE = "data/transactions.csv"
-CHECKPOINT_FILE = "data/scan_checkpoint.json"
-LARGE_SCAN_DIR = "data/large_scans"
 
 # ==================== UPGRADE: NEW CONFIG ====================
 MAX_SCAN_LIMIT = 1000000
 WEBHOOK_TIMEOUT = 10
 COMPRESSION_THRESHOLD = 1024 * 500  # 500KB
 # ===========================================================
-
-# Create directories
-os.makedirs('logs', exist_ok=True)
-os.makedirs('data', exist_ok=True)
-os.makedirs(LARGE_SCAN_DIR, exist_ok=True)
 
 # EXTREME PERFORMANCE TUNING for ultra-large scans
 REQUEST_DELAY = 0.005  # Reduced for maximum throughput (was 0.02)
@@ -626,10 +633,10 @@ def generate_html_table(preview_data):
     for header in preview_data['headers']:
         html += f'<th>{header}</th>'
     
-    html += '<tr></thead><tbody>'
+    html += '</tr></thead><tbody>'
     
     for row in preview_data['rows']:
-        html += ' hilab'
+        html += '<tr>'
         for header in preview_data['headers']:
             html += f'<td>{row.get(header, "")}</td>'
         html += '</tr>'
@@ -1716,5 +1723,5 @@ if __name__ == '__main__':
     print("\nServer starting on http://localhost:5000")
     print("="*60)
     
-    # OPTIMIZED: Production-ready server settings
-    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
+    # OPTIMIZED: Production-ready server settings with Render support
+    app.run(debug=False, host='0.0.0.0', port=PORT)
