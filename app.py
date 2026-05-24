@@ -128,6 +128,16 @@ except Exception as e:
 # Get port from environment variable (Render sets this)
 PORT = int(os.environ.get('PORT', 5000))
 
+# ==================== FRONTEND CONFIGURATION ====================
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Frontend directory - assuming it's in the same parent directory or alongside
+FRONTEND_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), 'frontend') if os.path.exists(os.path.join(os.path.dirname(SCRIPT_DIR), 'frontend')) else os.path.join(SCRIPT_DIR, 'frontend')
+FRONTEND_PORT = int(os.environ.get('FRONTEND_PORT', 8000))
+BACKEND_URL = os.environ.get('BACKEND_URL', f'http://localhost:{PORT}')
+
+# Ensure frontend directory exists
+os.makedirs(FRONTEND_DIR, exist_ok=True)
 # ===========================================================
 
 # Configuration
@@ -457,6 +467,37 @@ def log_request_info(response):
     """Log basic request information"""
     print(f"[{datetime.now().isoformat()}] {request.method} {request.path} - Status: {response.status_code}")
     return response
+
+def get_frontend_url():
+    """Generate the correct frontend URL based on environment"""
+    # Check if running on Render
+    if os.environ.get('RENDER'):
+        # On Render, frontend is served by the same service or separate service
+        render_url = os.environ.get('RENDER_EXTERNAL_URL', '')
+        if render_url:
+            return render_url
+        return f"https://{os.environ.get('RENDER_SERVICE_NAME', 'xrp-scanner')}.onrender.com"
+    
+    # Check for custom frontend URL from environment
+    if os.environ.get('FRONTEND_URL'):
+        return os.environ.get('FRONTEND_URL')
+    
+    # Default: localhost with frontend port
+    return f"http://localhost:{FRONTEND_PORT}"
+
+def get_backend_url():
+    """Generate the correct backend URL"""
+    if os.environ.get('RENDER'):
+        render_url = os.environ.get('RENDER_EXTERNAL_URL', '')
+        if render_url:
+            return render_url
+        return f"https://{os.environ.get('RENDER_SERVICE_NAME', 'xrp-scanner')}.onrender.com"
+    
+    if os.environ.get('BACKEND_URL'):
+        return os.environ.get('BACKEND_URL')
+    
+    return f"http://localhost:{PORT}"
+
 # ===========================================================
 
 # ============================================
@@ -465,7 +506,8 @@ def log_request_info(response):
 
 def build_live_file_links(wallet_address):
     """Generate live frontend explorer links while scan is running"""
-    base_url = request.host_url.rstrip('/') if request else 'http://localhost:5000'
+    base_url = get_frontend_url()
+    backend_url = get_backend_url()
     
     files = []
     
@@ -488,18 +530,10 @@ def build_live_file_links(wallet_address):
                 "created_at": datetime.fromtimestamp(
                     stat.st_ctime
                 ).isoformat(),
-                
-                "download_url":
-                    f"{base_url}/api/files/{filename}",
-                
-                "view_url":
-                    f"{base_url}/api/files/view/{filename}",
-                
-                "explorer_url":
-                    f"{base_url}/explorer?file={filename}",
-                
-                "iframe_url":
-                    f"{base_url}/api/files/view/{filename}"
+                "download_url": f"{backend_url}/api/files/{filename}",
+                "view_url": f"{backend_url}/api/files/view/{filename}",
+                "explorer_url": f"{base_url}/explorer?file={filename}",
+                "iframe_url": f"{backend_url}/api/files/view/{filename}"
             })
     
     return sorted(
@@ -511,6 +545,7 @@ def build_live_file_links(wallet_address):
 def get_generated_files(scan_id, wallet_address=None):
     """Get all generated files for a scan with metadata"""
     files = []
+    backend_url = get_backend_url()
     
     if not wallet_address:
         with scan_lock:
@@ -539,15 +574,13 @@ def get_generated_files(scan_id, wallet_address=None):
             else:
                 file_type = 'checkpoint'
             
-            base_url = request.host_url.rstrip('/') if request else ''
-            
             files.append({
                 'type': file_type,
                 'filename': filename,
                 'download_url': f'/api/files/{filename}',
                 'view_url': f'/api/files/view/{filename}',
-                'full_download_url': f"{base_url}/api/files/{filename}" if base_url else None,
-                'full_view_url': f"{base_url}/api/files/view/{filename}" if base_url else None,
+                'full_download_url': f"{backend_url}/api/files/{filename}",
+                'full_view_url': f"{backend_url}/api/files/view/{filename}",
                 'size': stat.st_size,
                 'created_at': datetime.fromtimestamp(stat.st_ctime).isoformat()
             })
@@ -678,7 +711,7 @@ def generate_html_table(preview_data):
         return html
     
     html += f'<p>Total rows: {preview_data["total_rows"]}</p>'
-    html += '<td><thead><tr>'
+    html += '<table><thead><tr>'
     
     for header in preview_data['headers']:
         html += f'<th>{header}</th>'
@@ -758,7 +791,9 @@ def large_scan_worker(wallet_address, scan_id, max_transactions=None, callback=N
                 'live_explorer': f"/explorer/live/{scan_id}",
                 'requested_scan_depth': max_transactions if max_transactions else 'FULL',
                 'full_mode': is_full_scan,
-                'scan_mode': 'EXTREME_DEPTH'
+                'scan_mode': 'EXTREME_DEPTH',
+                'frontend_url': get_frontend_url(),
+                'backend_url': get_backend_url()
             }
         
         rolling_preview = []
@@ -870,7 +905,9 @@ def large_scan_worker(wallet_address, scan_id, max_transactions=None, callback=N
                         'No Memos',
                         'Valid delivered amount'
                     ]
-                }
+                },
+                'frontend_url': get_frontend_url(),
+                'backend_url': get_backend_url()
             }, f, indent=2)
         
         generated_files = save_scan_files_metadata(scan_id, wallet_address)
@@ -925,46 +962,586 @@ def large_scan_worker(wallet_address, scan_id, max_transactions=None, callback=N
             'error': str(e)
         }
 
-# ==================== AUTO-START FRONTEND SERVER ====================
+# ==================== FRONTEND SERVER ====================
 import subprocess
 import atexit
 import signal
 
 frontend_process = None
-FRONTEND_PORT = 8000
+
+def create_frontend_index_html():
+    """Create the frontend index.html file if it doesn't exist"""
+    index_path = os.path.join(FRONTEND_DIR, 'index.html')
+    
+    if not os.path.exists(index_path):
+        backend_url = get_backend_url()
+        frontend_url = get_frontend_url()
+        
+        html_content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XRP Extreme Depth Scanner</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }}
+        
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+        
+        .header {{
+            text-align: center;
+            padding: 40px 20px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }}
+        
+        .header h1 {{
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }}
+        
+        .header p {{
+            color: #666;
+            font-size: 1.1em;
+        }}
+        
+        .status-badge {{
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }}
+        
+        .card {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }}
+        
+        .card h2 {{
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }}
+        
+        .input-group {{
+            margin-bottom: 20px;
+        }}
+        
+        label {{
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }}
+        
+        input, select {{
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }}
+        
+        input:focus, select:focus {{
+            outline: none;
+            border-color: #667eea;
+        }}
+        
+        button {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }}
+        
+        button:hover {{
+            transform: translateY(-2px);
+        }}
+        
+        button:disabled {{
+            opacity: 0.6;
+            cursor: not-allowed;
+        }}
+        
+        .scan-result {{
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: none;
+        }}
+        
+        .scan-result.active {{
+            display: block;
+        }}
+        
+        .progress-bar {{
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 15px 0;
+        }}
+        
+        .progress-fill {{
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }}
+        
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }}
+        
+        .stat-card {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }}
+        
+        .stat-card h3 {{
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }}
+        
+        .stat-card .value {{
+            font-size: 2em;
+            font-weight: bold;
+        }}
+        
+        .file-list {{
+            margin-top: 20px;
+        }}
+        
+        .file-item {{
+            background: #f9f9f9;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        
+        .file-info {{
+            flex: 1;
+        }}
+        
+        .file-name {{
+            font-weight: 600;
+            color: #333;
+        }}
+        
+        .file-size {{
+            font-size: 0.8em;
+            color: #666;
+            margin-left: 10px;
+        }}
+        
+        .file-actions a {{
+            margin-left: 10px;
+            text-decoration: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }}
+        
+        .btn-download {{
+            background: #4CAF50;
+            color: white;
+        }}
+        
+        .btn-view {{
+            background: #2196F3;
+            color: white;
+        }}
+        
+        .spinner {{
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }}
+        
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+        
+        .alert {{
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }}
+        
+        .alert-info {{
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #90caf9;
+        }}
+        
+        .alert-success {{
+            background: #e8f5e9;
+            color: #388e3c;
+            border: 1px solid #a5d6a7;
+        }}
+        
+        .alert-error {{
+            background: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #ef9a9a;
+        }}
+        
+        @media (max-width: 768px) {{
+            .container {{
+                padding: 10px;
+            }}
+            
+            .header h1 {{
+                font-size: 1.8em;
+            }}
+            
+            .stats-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 XRP Extreme Depth Scanner</h1>
+            <p>Blockchain-verified missing DestinationTag & Memo detection</p>
+            <div class="status-badge" id="apiStatus">Checking API...</div>
+        </div>
+        
+        <div class="card">
+            <h2>🔍 Start New Scan</h2>
+            <div class="input-group">
+                <label>XRP Wallet Address</label>
+                <input type="text" id="walletAddress" placeholder="rXXXXXXXX... (25-35 characters)" />
+            </div>
+            <div class="input-group">
+                <label>Scan Depth</label>
+                <select id="scanDepth">
+                    <option value="1000">1K transactions</option>
+                    <option value="5000">5K transactions</option>
+                    <option value="10000">10K transactions</option>
+                    <option value="20000">20K transactions</option>
+                    <option value="30000">30K transactions</option>
+                    <option value="40000">40K transactions</option>
+                    <option value="50000">50K transactions</option>
+                    <option value="60000">60K transactions</option>
+                    <option value="70000">70K transactions</option>
+                    <option value="80000">80K transactions</option>
+                    <option value="90000">90K transactions</option>
+                    <option value="100000">100K transactions</option>
+                    <option value="500000">500K transactions</option>
+                    <option value="1000000">1M transactions</option>
+                    <option value="5000000">5M transactions</option>
+                    <option value="10000000">10M transactions</option>
+                    <option value="50000000">50M transactions</option>
+                    <option value="100000000">100M transactions</option>
+                    <option value="0">FULL SCAN (All transactions)</option>
+                </select>
+            </div>
+            <button onclick="startScan()" id="scanBtn">Start Extreme Scan</button>
+            
+            <div id="scanResult" class="scan-result"></div>
+        </div>
+        
+        <div class="card">
+            <h2>📊 Active Scan Status</h2>
+            <div id="activeScanInfo">
+                <p>No active scan. Start one above!</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>📁 Generated Files</h2>
+            <div id="fileList">
+                <p>No files generated yet.</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '{backend_url}';
+        let currentScanId = null;
+        let statusInterval = null;
+        
+        // Check API status on load
+        async function checkAPI() {{
+            try {{
+                const response = await fetch(`${{API_BASE}}/api/test`);
+                if (response.ok) {{
+                    document.getElementById('apiStatus').innerHTML = '✅ API Online';
+                    document.getElementById('apiStatus').style.background = '#4CAF50';
+                }} else {{
+                    throw new Error('API not responding');
+                }}
+            }} catch (error) {{
+                document.getElementById('apiStatus').innerHTML = '⚠️ API Offline';
+                document.getElementById('apiStatus').style.background = '#ff9800';
+            }}
+        }}
+        
+        // Start a new scan
+        async function startScan() {{
+            const walletAddress = document.getElementById('walletAddress').value.trim();
+            const scanDepth = document.getElementById('scanDepth').value;
+            
+            if (!walletAddress) {{
+                showAlert('Please enter a wallet address', 'error');
+                return;
+            }}
+            
+            if (!walletAddress.startsWith('r') || walletAddress.length < 25 || walletAddress.length > 35) {{
+                showAlert('Invalid XRP wallet address format', 'error');
+                return;
+            }}
+            
+            const scanBtn = document.getElementById('scanBtn');
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Starting Scan...';
+            
+            try {{
+                const maxTransactions = parseInt(scanDepth);
+                const response = await fetch(`${{API_BASE}}/api/scan/large`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        address: walletAddress,
+                        max_transactions: maxTransactions === 0 ? null : maxTransactions
+                    }})
+                }});
+                
+                const data = await response.json();
+                
+                if (data.scan_id) {{
+                    currentScanId = data.scan_id;
+                    showAlert(`Scan started! ID: ${{currentScanId}}`, 'success');
+                    startStatusMonitoring(currentScanId);
+                }} else {{
+                    showAlert('Failed to start scan: ' + JSON.stringify(data), 'error');
+                }}
+            }} catch (error) {{
+                showAlert('Error starting scan: ' + error.message, 'error');
+            }} finally {{
+                scanBtn.disabled = false;
+                scanBtn.textContent = 'Start Extreme Scan';
+            }}
+        }}
+        
+        // Monitor scan status
+        function startStatusMonitoring(scanId) {{
+            if (statusInterval) clearInterval(statusInterval);
+            
+            statusInterval = setInterval(async () => {{
+                try {{
+                    const response = await fetch(`${{API_BASE}}/api/scan/status/${{scanId}}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        updateScanStatus(data);
+                        updateFileList(data.live_files || []);
+                        
+                        if (data.status === 'completed' || data.status === 'error') {{
+                            clearInterval(statusInterval);
+                            if (data.status === 'completed') {{
+                                showAlert('Scan completed successfully!', 'success');
+                            }} else if (data.status === 'error') {{
+                                showAlert('Scan failed: ' + (data.error || 'Unknown error'), 'error');
+                            }}
+                        }}
+                    }}
+                }} catch (error) {{
+                    console.error('Status check failed:', error);
+                }}
+            }}, 2000);
+        }}
+        
+        // Update UI with scan status
+        function updateScanStatus(data) {{
+            const statusDiv = document.getElementById('activeScanInfo');
+            const progress = data.progress || 0;
+            
+            statusDiv.innerHTML = `
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${{progress}}%">${{progress.toFixed(1)}}%</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Status</h3>
+                        <div class="value">${{data.status || 'unknown'}}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Processed</h3>
+                        <div class="value">${{(data.processed || 0).toLocaleString()}}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Missing Tags</h3>
+                        <div class="value">${{data.missing || 0}}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total XRP</h3>
+                        <div class="value">${{(data.total_amount || 0).toFixed(2)}}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Scan Mode</h3>
+                        <div class="value">${{data.requested_scan_depth || 'STANDARD'}}</div>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        // Update file list
+        function updateFileList(files) {{
+            const fileDiv = document.getElementById('fileList');
+            
+            if (!files || files.length === 0) {{
+                fileDiv.innerHTML = '<p>No files generated yet.</p>';
+                return;
+            }}
+            
+            let html = '<div class="file-list">';
+            files.forEach(file => {{
+                const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+                html += `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <span class="file-name">📄 ${{file.filename}}</span>
+                            <span class="file-size">(${{sizeMB}} MB)</span>
+                            <div style="font-size: 0.8em; color: #666;">Created: ${{new Date(file.created_at).toLocaleString()}}</div>
+                        </div>
+                        <div class="file-actions">
+                            <a href="${{file.download_url}}" class="btn-download" download>💾 Download</a>
+                            <a href="${{file.view_url}}" class="btn-view" target="_blank">👁️ View</a>
+                        </div>
+                    </div>
+                `;
+            }});
+            html += '</div>';
+            fileDiv.innerHTML = html;
+        }}
+        
+        // Show alert message
+        function showAlert(message, type) {{
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${{type}}`;
+            alertDiv.textContent = message;
+            alertDiv.style.position = 'fixed';
+            alertDiv.style.top = '20px';
+            alertDiv.style.right = '20px';
+            alertDiv.style.zIndex = '1000';
+            alertDiv.style.maxWidth = '400px';
+            
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {{
+                alertDiv.remove();
+            }}, 5000);
+        }}
+        
+        // Initialize
+        checkAPI();
+        setInterval(checkAPI, 30000);
+    </script>
+</body>
+</html>'''
+        
+        with open(index_path, 'w') as f:
+            f.write(html_content)
+        print(f"✅ Created frontend index.html at {index_path}")
+    
+    return index_path
 
 def start_frontend():
-    """Start frontend exactly like bash script"""
+    """Start frontend HTTP server"""
     global frontend_process
     
     try:
-        backend_dir = os.path.dirname(os.path.abspath(__file__))
-        frontend_dir = os.path.join(os.path.dirname(backend_dir), 'frontend')
+        # Create index.html if it doesn't exist
+        create_frontend_index_html()
         
-        print("Starting frontend server...")
+        # Check if frontend directory exists
+        if not os.path.exists(FRONTEND_DIR):
+            os.makedirs(FRONTEND_DIR, exist_ok=True)
+            print(f"✅ Created frontend directory: {FRONTEND_DIR}")
         
-        if not os.path.exists(frontend_dir):
-            os.makedirs(frontend_dir, exist_ok=True)
-            print(f"✅ Created frontend directory: {frontend_dir}")
+        # Change to frontend directory
+        original_dir = os.getcwd()
+        os.chdir(FRONTEND_DIR)
         
-        os.chdir(frontend_dir)
-        
+        # Start HTTP server
         frontend_process = subprocess.Popen(
             [sys.executable, '-m', 'http.server', str(FRONTEND_PORT)],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            text=True
         )
         
-        os.chdir(backend_dir)
+        os.chdir(original_dir)
         time.sleep(2)
         
         if frontend_process.poll() is None:
-            print("✅ Frontend server started!")
+            frontend_url = get_frontend_url()
+            print(f"✅ Frontend server started at {frontend_url}")
+            print(f"📁 Frontend directory: {FRONTEND_DIR}")
+            return True
         else:
             print("❌ Frontend server failed to start")
+            return False
             
     except Exception as e:
         print(f"Error starting frontend: {e}")
+        return False
 
 def stop_frontend():
     """Stop frontend server on exit"""
@@ -972,14 +1549,23 @@ def stop_frontend():
     if frontend_process and frontend_process.poll() is None:
         print("\n🛑 Stopping frontend server...")
         frontend_process.terminate()
-        frontend_process.wait(timeout=3)
+        try:
+            frontend_process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            frontend_process.kill()
         print("✅ Frontend server stopped")
 
+# Register cleanup
 atexit.register(stop_frontend)
+
+# ==================== FLASK ROUTES ====================
 
 @app.route('/')
 def home():
     """Home endpoint with API information"""
+    frontend_url = get_frontend_url()
+    backend_url = get_backend_url()
+    
     return jsonify({
         "name": "XRP Extreme Depth Wallet Scanner",
         "version": "2.0.0",
@@ -1056,7 +1642,10 @@ def home():
         "supported_depths": ["1K", "5K", "10K", "20K", "30K", "40K", "50K", "60K", "70K", "80K", "90K", "100K", "500K", "1M", "5M", "10M", "50M", "100M", "FULL"],
         "data_directory": DATA_DIR,
         "documentation": "https://github.com/johnsteven1/XRP-SCAN-",
-        "frontend_url": f"http://localhost:{FRONTEND_PORT}" if FRONTEND_PORT else None
+        "frontend_url": frontend_url,
+        "backend_url": backend_url,
+        "frontend_port": FRONTEND_PORT,
+        "backend_port": PORT
     })
 
 @app.route('/api/scan', methods=['POST', 'OPTIONS'])
@@ -1188,6 +1777,8 @@ def start_large_scan():
         executor = ThreadPoolExecutor(max_workers=1)
         executor.submit(large_scan_worker, wallet_address, scan_id, max_transactions, None)
         
+        frontend_url = get_frontend_url()
+        
         with scan_lock:
             active_scans[scan_id] = {
                 'status': 'starting',
@@ -1204,7 +1795,8 @@ def start_large_scan():
                 'live_explorer': f"/explorer/live/{scan_id}",
                 'requested_scan_depth': max_transactions if max_transactions else 'FULL',
                 'full_mode': is_full_scan,
-                'scan_mode': 'EXTREME_DEPTH'
+                'scan_mode': 'EXTREME_DEPTH',
+                'frontend_url': frontend_url
             }
         
         return jsonify({
@@ -1216,6 +1808,7 @@ def start_large_scan():
             'validation_type': 'blockchain_level_verification',
             'requested_scan_depth': max_transactions if max_transactions else 'FULL',
             'full_mode': is_full_scan,
+            'frontend_url': frontend_url,
             'warning': 'This is an extreme depth scan that may take significant time' if total_tx != 'unknown' and total_tx > 10000000 else None
         })
         
@@ -1237,6 +1830,9 @@ def get_scan_status(scan_id):
                 wallet_address = scan_data.get('wallet')
                 if wallet_address:
                     scan_data['downloads'] = get_generated_files(scan_id, wallet_address)
+            
+            scan_data['frontend_url'] = get_frontend_url()
+            scan_data['backend_url'] = get_backend_url()
             
             return jsonify({
                 "success": True,
@@ -1510,13 +2106,17 @@ def file_explorer(scan_id):
                         'files': files,
                         'scan_stats': scan_stats,
                         'total_files': len(files),
-                        'total_size_bytes': sum(f['size'] for f in files)
+                        'total_size_bytes': sum(f['size'] for f in files),
+                        'frontend_url': get_frontend_url(),
+                        'backend_url': get_backend_url()
                     })
         
         manifest_file = os.path.join(LARGE_SCAN_DIR, f"{scan_id}_files_manifest.json")
         if os.path.exists(manifest_file):
             with open(manifest_file, 'r') as f:
                 manifest = json.load(f)
+                manifest['frontend_url'] = get_frontend_url()
+                manifest['backend_url'] = get_backend_url()
                 return jsonify(manifest)
         
         matching_files = []
@@ -1544,7 +2144,9 @@ def file_explorer(scan_id):
                 'wallet': wallet_hint or 'unknown',
                 'files': matching_files,
                 'total_files': len(matching_files),
-                'note': 'Files found by pattern matching'
+                'note': 'Files found by pattern matching',
+                'frontend_url': get_frontend_url(),
+                'backend_url': get_backend_url()
             })
         
         return jsonify({"error": "No files found for this scan ID"}), 404
@@ -1598,7 +2200,9 @@ def get_batch_files(scan_id):
             'wallet': wallet_address,
             'batch_files': batch_files,
             'total_batches': len(batch_files),
-            'total_size_bytes': sum(f['size'] for f in batch_files)
+            'total_size_bytes': sum(f['size'] for f in batch_files),
+            'frontend_url': get_frontend_url(),
+            'backend_url': get_backend_url()
         })
         
     except Exception as e:
@@ -1645,6 +2249,8 @@ def live_explorer(scan_id):
             if scan_id in active_scans:
                 scan_data = active_scans[scan_id].copy()
                 wallet = scan_data.get('wallet')
+                frontend_url = get_frontend_url()
+                backend_url = get_backend_url()
                 
                 if wallet:
                     live_files = build_live_file_links(wallet)
@@ -1663,10 +2269,15 @@ def live_explorer(scan_id):
                             a:hover {{ text-decoration: underline; }}
                             .stats {{ display: inline-block; margin-right: 20px; }}
                             .warning {{ color: #ff9800; }}
+                            .frontend-link {{ background: #2a2a2a; padding: 10px; margin: 20px 0; border-radius: 5px; }}
                         </style>
                     </head>
                     <body>
                         <h1>🔍 Live Scanner: {wallet}</h1>
+                        <div class="frontend-link">
+                            🌐 <a href="{frontend_url}" target="_blank">Open Full Frontend Dashboard</a> | 
+                            🔗 <a href="{backend_url}" target="_blank">Backend API</a>
+                        </div>
                         <div class="status">
                             <div class="stats">Status: <strong>{scan_data.get('status', 'unknown')}</strong></div>
                             <div class="stats">Processed: <strong>{scan_data.get('processed', 0):,}</strong></div>
@@ -1704,6 +2315,9 @@ def live_explorer(scan_id):
 @app.route('/api/test', methods=['GET'])
 def test():
     """Test endpoint to verify API is working"""
+    frontend_url = get_frontend_url()
+    backend_url = get_backend_url()
+    
     return jsonify({
         "status": "ok", 
         "message": "API is working with EXTREME DEPTH scanning support!",
@@ -1727,7 +2341,9 @@ def test():
             "connection_pool": pool_connections
         },
         "data_directory": DATA_DIR,
-        "writable": os.access(DATA_DIR, os.W_OK)
+        "writable": os.access(DATA_DIR, os.W_OK),
+        "frontend_url": frontend_url,
+        "backend_url": backend_url
     })
 
 # ==================== UPGRADE: NEW ROUTES ====================
@@ -1799,6 +2415,9 @@ if __name__ == '__main__':
     print("="*60)
     print(f"\n📁 Data Directory: {DATA_DIR}")
     print(f"✅ Directory writable: {os.access(DATA_DIR, os.W_OK)}")
+    print(f"\n🌐 Frontend Directory: {FRONTEND_DIR}")
+    print(f"📁 Frontend index: {os.path.join(FRONTEND_DIR, 'index.html')}")
+    
     print("\nEXTREME PERFORMANCE OPTIMIZATIONS:")
     print(f"✅ Batch Size: {BATCH_SIZE}")
     print(f"✅ Concurrent Workers: {MAX_WORKERS}")
@@ -1806,16 +2425,19 @@ if __name__ == '__main__':
     print(f"✅ Connection Pool: {pool_connections}")
     print("✅ Memory-efficient streaming (rolling previews only)")
     print("✅ Direct-to-disk CSV batching")
+    
     print("\nEXTREME DEPTH SCAN SUPPORT:")
     print("✅ 1K | 5K | 10K | 20K | 30K | 40K | 50K | 60K | 70K | 80K | 90K | 100K transactions")
     print("✅ 500K | 1M | 5M | 10M | 50M | 100M transactions")
     print("✅ FULL blockchain scan mode")
+    
     print("\nBLOCKCHAIN VALIDATION:")
     print("✅ DestinationTag must be absent or null")
     print("✅ Memos array must be absent or empty")
     print("✅ Transaction result must equal tesSUCCESS")
     print("✅ Only successful Payment transactions")
     print("✅ Valid delivered amount verification")
+    
     print("\nREAL-TIME FEATURES:")
     print("✅ Live file streaming")
     print("✅ Real-time progress tracking")
@@ -1823,12 +2445,18 @@ if __name__ == '__main__':
     print("✅ File explorer")
     print("✅ CSV batch exports")
     
-    # Start frontend server before backend
+    # Create frontend files and start server
+    create_frontend_index_html()
     start_frontend()
     
-    print("\n✅ XRP Wallet Scanner is running!")
-    print(f"📱 Frontend: http://localhost:{FRONTEND_PORT}")
-    print(f"🔧 Backend API: http://localhost:{PORT}")
+    frontend_url = get_frontend_url()
+    backend_url = get_backend_url()
+    
+    print("\n" + "="*60)
+    print("✅ XRP Wallet Scanner is running!")
+    print(f"📱 Frontend UI: {frontend_url}")
+    print(f"🔧 Backend API: {backend_url}")
+    print(f"📄 API Documentation: {backend_url}")
     print("\nPress Ctrl+C to stop both servers")
     print("="*60)
     
