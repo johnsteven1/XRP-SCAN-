@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XRP Sentinel - Enterprise Tag Monitor | Blockchain Verified</title>
+    <!-- Favicon: XRP / Blockchain style icon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000'/%3E%3Ccircle cx='50' cy='50' r='45' fill='none' stroke='%2300E5BF' stroke-width='4'/%3E%3Cpath d='M50 20 L65 35 L50 50 L35 35 Z' fill='%230066FF' stroke='%2300E5BF' stroke-width='2'/%3E%3Cpath d='M50 50 L65 65 L50 80 L35 65 Z' fill='%2300E5BF' stroke='%230066FF' stroke-width='2'/%3E%3Ccircle cx='50' cy='35' r='3' fill='%23FFF'/%3E%3Ccircle cx='50' cy='65' r='3' fill='%23FFF'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Inline CSS for icon styling -->
+    <style>
+        /* Inline styles for enhanced icon visuals - preserves original link styling */
+        .logo svg {
+            filter: drop-shadow(0 0 4px rgba(0,102,255,0.4));
+            transition: filter 0.3s ease;
+        }
+        .logo:hover svg {
+            filter: drop-shadow(0 0 8px rgba(0,229,191,0.6));
+        }
+        /* Additional subtle blockchain verification badge glow */
+        .validation-banner {
+            box-shadow: 0 4px 12px rgba(16,185,129,0.2);
+        }
+        .badge[style*="background: #10b981"] {
+            transition: all 0.2s;
+        }
+        /* Keep data persistence visually consistent */
+        .nav-item.active svg {
+            stroke: #00E5BF;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo-container">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <path d="M16 2L4 8v12l12 6 12-6V8l-12-6z" stroke="url(#gradient)" stroke-width="2" fill="none"/>
+                        <path d="M16 14l6-3v6l-6 3-6-3v-6l6 3z" fill="url(#gradient)"/>
+                        <defs>
+                            <linearGradient id="gradient" x1="4" y1="8" x2="28" y2="24" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#0066FF"/>
+                                <stop offset="1" stop-color="#00E5BF"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <span class="logo-text">XRP<span>Sentinel</span></span>
+                </div>
+                <div class="badge">Enterprise</div>
+            </div>
+            
+            <div class="nav-menu">
+                <a href="#" class="nav-item active">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1"/>
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="#" class="nav-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4h7"/>
+                        <path d="M15 9h6v6"/>
+                        <path d="M21 9l-9 9-4-4-3 3"/>
+                    </svg>
+                    Scans
+                </a>
+                <a href="#" class="nav-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4"/>
+                        <circle cx="12" cy="8" r="1" fill="currentColor"/>
+                    </svg>
+                    Analytics
+                </a>
+                <a href="#" class="nav-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    Profile
+                </a>
+            </div>
+            
+            <div class="nav-footer">
+                <div class="system-status">
+                    <div class="status-indicator online"></div>
+                    <span>XRP Ledger: Connected</span>
+                </div>
+                <div class="version">v2.0.0 · Enterprise</div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>Transaction Monitor</h1>
+                    <span class="live-badge">
+                        <span class="pulse"></span>
+                        Live
+                    </span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="refreshLogs()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                    <div class="user-menu">
+                        <span class="user-avatar">JD</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Quick Stats -->
+                <div class="stats-grid" id="analyticsStats">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Total Scans</span>
+                            <span class="stat-value" id="totalScans">-</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Total XRP at Risk</span>
+                            <span class="stat-value" id="totalXRP">-</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Missing Tags</span>
+                            <span class="stat-value" id="totalMissing">-</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon purple">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 12H4M12 4v16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Avg/Scan</span>
+                            <span class="stat-value" id="avgMissing">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Blockchain Validation Banner -->
+                <div class="validation-banner" id="validationBanner" style="background: linear-gradient(135deg, #10b981, #06b6d4); color: white; padding: 12px 20px; border-radius: 12px; margin-bottom: 24px; display: none;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 24px;">🔗</span>
+                        <div>
+                            <strong>Blockchain-Level Validation Active</strong>
+                            <p style="margin: 0; font-size: 13px; opacity: 0.9;">All transactions are verified against XRPL for: Payment type, tesSUCCESS, no DestinationTag, no Memos, valid amounts</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scan Panel -->
+                <div class="panel scan-panel">
+                    <div class="panel-header">
+                        <h2>New Scan</h2>
+                        <div class="panel-actions">
+                            <span class="badge" id="validationBadge" style="background: #10b981;">🔗 Blockchain Verified</span>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="scan-form">
+                            <div class="input-group">
+                                <div class="input-field">
+                                    <label>Wallet Address</label>
+                                    <input type="text" id="walletAddress" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXX" value="rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh">
+                                </div>
+                                <div class="scan-options">
+                                    <div class="option-item">
+                                        <label>Scan Depth</label>
+                                        <select id="limit">
+                                            <option value="100">Standard (100 txs)</option>
+                                            <option value="500">Deep (500 txs)</option>
+                                            <option value="1000">Extended (1000 txs)</option>
+                                        </select>
+                                    </div>
+                                    <div class="option-item">
+                                        <label>Mode</label>
+                                        <select id="scanMode">
+                                            <option value="standard">Standard Scan (Blockchain Verified)</option>
+                                            <option value="large">Large Scan (All - Blockchain Verified)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="action-buttons">
+                                <button onclick="scanWallet()" id="scanBtn" class="btn btn-primary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"/>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                    </svg>
+                                    Start Verified Scan
+                                </button>
+                                <button onclick="startLargeScan()" id="largeScanBtn" class="btn btn-secondary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M2 12h20M12 2v20"/>
+                                    </svg>
+                                    Large Scan (All)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar for Large Scans -->
+                        <div id="scanProgress" class="scan-progress" style="display: none;">
+                            <div class="progress-header">
+                                <span class="progress-title">Large Scan in Progress</span>
+                                <span class="progress-percentage">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-bar"></div>
+                            </div>
+                            <div class="progress-stats"></div>
+                            <div class="progress-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading" class="loading-overlay" style="display: none;">
+                    <div class="loading-content">
+                        <div class="loading-spinner"></div>
+                        <p>Scanning wallet on XRP Ledger</p>
+                        <span class="loading-sub">This may take a moment</span>
+                    </div>
+                </div>
+
+                <!-- Results Panel -->
+                <div class="panel results-panel" id="summarySection" style="display: none;">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <h2>Scan Results</h2>
+                            <span class="result-badge" id="resultCount">0 found</span>
+                            <span class="result-badge" style="background: #10b981; margin-left: 8px;">🔗 Blockchain Verified</span>
+                        </div>
+                        <div class="panel-actions">
+                            <button onclick="downloadData('csv')" class="btn btn-icon" title="Download CSV">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                            </button>
+                            <button onclick="downloadData('json')" class="btn btn-icon" title="Download JSON">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/>
+                                    <line x1="16" y1="17" x2="8" y2="17"/>
+                                    <polyline points="10 9 9 9 8 9"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="summary-stats" id="statsGrid"></div>
+                        
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date & Time</th>
+                                        <th>Transaction Hash</th>
+                                        <th>Sender</th>
+                                        <th>Amount (XRP)</th>
+                                        <th>Destination Tag</th>
+                                        <th>Validation Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody">
+                                    <tr><td colspan="7" class="empty-state">No data yet. Start a scan to see results.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Logs -->
+                <div class="panel logs-panel">
+                    <div class="panel-header">
+                        <h2>Activity Log</h2>
+                        <div style="display: flex; gap: 8px;">
+                            <span class="badge" style="background: #10b981;">🔗 Verified Scans</span>
+                            <button onclick="refreshLogs()" class="btn btn-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="logs-container" id="logsContainer">
+                            <div class="empty-state">No scan history available</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+    <!-- Data Persistence: Auto-save & load Wallet Address, Scan Results (table data), Activity Logs -->
+    <script>
+        (function() {
+            // --- LocalStorage Keys ---
+            const STORAGE_KEYS = {
+                WALLET_ADDRESS: 'xrp_sentinel_wallet_address',
+                SCAN_RESULTS: 'xrp_sentinel_scan_results',   // array of transaction objects
+                ACTIVITY_LOGS: 'xrp_sentinel_activity_logs'
+            };
+
+            // Helper: dispatch custom event when table/logs are updated externally (so we can save)
+            function triggerDataSave() {
+                // Save current wallet address from DOM
+                const walletInput = document.getElementById('walletAddress');
+                if (walletInput) {
+                    const addr = walletInput.value.trim();
+                    if (addr) localStorage.setItem(STORAGE_KEYS.WALLET_ADDRESS, addr);
+                }
+                
+                // Save scan results (table data) by reading tbody rows
+                const tableBody = document.getElementById('tableBody');
+                if (tableBody && tableBody.children.length > 0) {
+                    const rows = Array.from(tableBody.querySelectorAll('tr'));
+                    // skip empty state row if it contains colspan empty message
+                    const hasData = rows.some(row => !row.querySelector('.empty-state') && row.cells && row.cells.length > 1);
+                    if (hasData) {
+                        const results = [];
+                        for (let row of rows) {
+                            if (row.querySelector('.empty-state')) continue;
+                            const cells = row.cells;
+                            if (cells.length >= 6) {
+                                results.push({
+                                    date: cells[0]?.innerText || '',
+                                    txHash: cells[1]?.innerText || '',
+                                    sender: cells[2]?.innerText || '',
+                                    amount: cells[3]?.innerText || '',
+                                    destinationTag: cells[4]?.innerText || '',
+                                    validationStatus: cells[5]?.innerHTML || cells[5]?.innerText || ''
+                                });
+                            }
+                        }
+                        if (results.length) localStorage.setItem(STORAGE_KEYS.SCAN_RESULTS, JSON.stringify(results));
+                        else localStorage.removeItem(STORAGE_KEYS.SCAN_RESULTS);
+                    } else {
+                        // If no data, clear stored results
+                        localStorage.removeItem(STORAGE_KEYS.SCAN_RESULTS);
+                    }
+                } else {
+                    localStorage.removeItem(STORAGE_KEYS.SCAN_RESULTS);
+                }
+                
+                // Save activity logs
+                const logsContainer = document.getElementById('logsContainer');
+                if (logsContainer) {
+                    const logEntries = [];
+                    const logItems = logsContainer.querySelectorAll('.log-entry');
+                    if (logItems.length) {
+                        logItems.forEach(item => {
+                            const text = item.innerText.trim();
+                            if (text) logEntries.push(text);
+                        });
+                        if (logEntries.length) localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOGS, JSON.stringify(logEntries));
+                        else localStorage.removeItem(STORAGE_KEYS.ACTIVITY_LOGS);
+                    } else {
+                        // check if empty-state text exists but we don't save empty
+                        const emptyMsg = logsContainer.querySelector('.empty-state');
+                        if (!emptyMsg && logEntries.length === 0) localStorage.removeItem(STORAGE_KEYS.ACTIVITY_LOGS);
+                        else if (logEntries.length) localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOGS, JSON.stringify(logEntries));
+                        else localStorage.removeItem(STORAGE_KEYS.ACTIVITY_LOGS);
+                    }
+                }
+            }
+
+            // Load wallet address, scan results, activity logs and restore UI
+            function loadSavedData() {
+                // 1. Restore Wallet Address
+                const savedWallet = localStorage.getItem(STORAGE_KEYS.WALLET_ADDRESS);
+                const walletInput = document.getElementById('walletAddress');
+                if (savedWallet && walletInput) {
+                    walletInput.value = savedWallet;
+                }
+                
+                // 2. Restore Scan Results (table)
+                const savedResults = localStorage.getItem(STORAGE_KEYS.SCAN_RESULTS);
+                const tableBody = document.getElementById('tableBody');
+                const summarySection = document.getElementById('summarySection');
+                if (savedResults && tableBody) {
+                    try {
+                        const results = JSON.parse(savedResults);
+                        if (Array.isArray(results) && results.length > 0) {
+                            renderTableFromData(results);
+                            if (summarySection) summarySection.style.display = 'block';
+                            // also attempt to update stats and counters if global functions exist (defer to app.js)
+                            if (typeof updateStatsFromData === 'function') updateStatsFromData(results);
+                            else if (window.updateAnalyticsFromResults) window.updateAnalyticsFromResults(results);
+                            // update result count badge
+                            const resultCountSpan = document.getElementById('resultCount');
+                            if (resultCountSpan) resultCountSpan.innerText = `${results.length} found`;
+                        } else {
+                            if (summarySection) summarySection.style.display = 'none';
+                            if (tableBody) tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No data yet. Start a scan to see results.</td></tr>';
+                        }
+                    } catch(e) { console.warn("Error parsing saved scan results", e); }
+                } else if (tableBody && (!savedResults || savedResults === '[]')) {
+                    if (summarySection) summarySection.style.display = 'none';
+                    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No data yet. Start a scan to see results.</td></tr>';
+                }
+                
+                // 3. Restore Activity Logs
+                const savedLogs = localStorage.getItem(STORAGE_KEYS.ACTIVITY_LOGS);
+                const logsContainer = document.getElementById('logsContainer');
+                if (savedLogs && logsContainer) {
+                    try {
+                        const logs = JSON.parse(savedLogs);
+                        if (Array.isArray(logs) && logs.length > 0) {
+                            logsContainer.innerHTML = '';
+                            logs.forEach(logText => {
+                                const logDiv = document.createElement('div');
+                                logDiv.className = 'log-entry';
+                                logDiv.style.cssText = 'padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 13px; font-family: monospace; color: #e2e8f0;';
+                                logDiv.innerText = logText;
+                                logsContainer.appendChild(logDiv);
+                            });
+                        } else {
+                            logsContainer.innerHTML = '<div class="empty-state">No scan history available</div>';
+                        }
+                    } catch(e) { console.warn("Error parsing saved logs", e); }
+                } else if (logsContainer && (!savedLogs || savedLogs === '[]')) {
+                    logsContainer.innerHTML = '<div class="empty-state">No scan history available</div>';
+                }
+                
+                // trigger any extra UI updates (like total scans, XRP amount) after load
+                if (typeof window.updateDashboardStats === 'function') {
+                    window.updateDashboardStats();
+                } else {
+                    // fallback: attempt to recompute from table data
+                    const rows = document.querySelectorAll('#tableBody tr');
+                    let missingCount = 0;
+                    let totalXrp = 0;
+                    rows.forEach(row => {
+                        if (row.querySelector('.empty-state')) return;
+                        const cells = row.cells;
+                        if (cells.length >= 4) {
+                            const amountText = cells[3]?.innerText || '0';
+                            const amount = parseFloat(amountText) || 0;
+                            totalXrp += amount;
+                            const tagText = cells[4]?.innerText || '';
+                            if (tagText === 'Missing' || tagText === 'None' || tagText === '') missingCount++;
+                        }
+                    });
+                    const totalScansElem = document.getElementById('totalScans');
+                    const totalXRPElem = document.getElementById('totalXRP');
+                    const totalMissingElem = document.getElementById('totalMissing');
+                    const avgMissingElem = document.getElementById('avgMissing');
+                    const rowCount = rows.length - (rows[0]?.querySelector('.empty-state') ? 1 : 0);
+                    if (totalScansElem) totalScansElem.innerText = rowCount > 0 ? rowCount : '-';
+                    if (totalXRPElem) totalXRPElem.innerText = totalXrp > 0 ? `${totalXrp.toFixed(2)} XRP` : '-';
+                    if (totalMissingElem) totalMissingElem.innerText = missingCount > 0 ? missingCount : '-';
+                    if (avgMissingElem && rowCount > 0) avgMissingElem.innerText = (missingCount / rowCount).toFixed(1);
+                    else if (avgMissingElem) avgMissingElem.innerText = '-';
+                }
+            }
+            
+            // Helper to render table data (ensures consistency)
+            function renderTableFromData(dataArray) {
+                const tableBody = document.getElementById('tableBody');
+                if (!tableBody) return;
+                if (!dataArray || dataArray.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No data yet. Start a scan to see results.</td></tr>';
+                    return;
+                }
+                tableBody.innerHTML = '';
+                dataArray.forEach(tx => {
+                    const row = tableBody.insertRow();
+                    row.insertCell(0).innerText = tx.date || '';
+                    row.insertCell(1).innerText = tx.txHash || '';
+                    row.insertCell(2).innerText = tx.sender || '';
+                    row.insertCell(3).innerText = tx.amount || '';
+                    row.insertCell(4).innerText = tx.destinationTag || '';
+                    row.insertCell(5).innerHTML = tx.validationStatus || '<span style="color:#10b981;">✓ Verified</span>';
+                    const actionCell = row.insertCell(6);
+                    const viewBtn = document.createElement('button');
+                    viewBtn.innerText = 'Details';
+                    viewBtn.className = 'btn btn-icon';
+                    viewBtn.style.background = 'none';
+                    viewBtn.style.border = 'none';
+                    viewBtn.style.color = '#00E5BF';
+                    viewBtn.style.cursor = 'pointer';
+                    viewBtn.onclick = (function(hash) { return function() { alert(`Transaction details:\nHash: ${hash}\nBlockchain verified.`); }; })(tx.txHash);
+                    actionCell.appendChild(viewBtn);
+                });
+            }
+            
+            // Override / observe changes to save data whenever critical updates happen
+            // We'll wrap any existing functions that mutate table or logs. But to be safe, we use MutationObserver and event delegation.
+            // Also attach event listeners to input and any scan completion.
+            function setupAutoSaveObservers() {
+                // Save on wallet address change
+                const walletInput = document.getElementById('walletAddress');
+                if (walletInput) {
+                    walletInput.addEventListener('input', () => {
+                        const addr = walletInput.value.trim();
+                        if (addr) localStorage.setItem(STORAGE_KEYS.WALLET_ADDRESS, addr);
+                        else localStorage.removeItem(STORAGE_KEYS.WALLET_ADDRESS);
+                    });
+                }
+                
+                // Watch for changes in tableBody (scan results)
+                const tableBody = document.getElementById('tableBody');
+                if (tableBody) {
+                    const observer = new MutationObserver(() => { triggerDataSave(); });
+                    observer.observe(tableBody, { childList: true, subtree: true, characterData: true });
+                }
+                
+                // Watch activity logs container
+                const logsContainer = document.getElementById('logsContainer');
+                if (logsContainer) {
+                    const logObserver = new MutationObserver(() => { triggerDataSave(); });
+                    logObserver.observe(logsContainer, { childList: true, subtree: true, characterData: true });
+                }
+                
+                // also hook into global functions if available (app.js often adds logs/results)
+                // Ensure saving before unload
+                window.addEventListener('beforeunload', () => { triggerDataSave(); });
+                // periodic auto-save also helpful
+                setInterval(() => { triggerDataSave(); }, 3000);
+            }
+            
+            // Expose a method that can be called by existing code after scan completes to ensure save
+            window.persistCurrentData = function() {
+                triggerDataSave();
+            };
+            
+            // Patch potential calls inside app.js: we can detect if scanWallet or startLargeScan exist later,
+            // but we will also add an after-scan hook via setTimeout to watch for changes
+            // Safe: after each possible scan action, we auto-save because observer catches DOM changes anyway.
+            
+            // Extend downloadData and any other to trigger save before download (optional)
+            const originalDownload = window.downloadData;
+            if (originalDownload) {
+                window.downloadData = function(type) {
+                    triggerDataSave();
+                    originalDownload(type);
+                };
+            }
+            
+            // Function to force sync from current dom to localStorage
+            window.forceSaveToLocalStorage = triggerDataSave;
+            
+            // initial load
+            loadSavedData();
+            setupAutoSaveObservers();
+            // initial save after load to make sure everything consistent
+            setTimeout(() => { triggerDataSave(); }, 500);
+        })();
+    </script>
+</body>
+</html>

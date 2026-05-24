@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: xrp-scanner
+    runtime: python
+    repo: https://github.com/yourusername/your-repo
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: ./run1.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    disk:
+      name: xrp-scanner-data
+      mountPath: /tmp/xrp_scanner_data
+      sizeGB: 10
