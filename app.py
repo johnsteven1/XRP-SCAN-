@@ -977,6 +977,88 @@ def stop_frontend():
 
 atexit.register(stop_frontend)
 
+@app.route('/')
+def home():
+    """Home endpoint with API information"""
+    return jsonify({
+        "name": "XRP Extreme Depth Wallet Scanner",
+        "version": "2.0.0",
+        "status": "online",
+        "description": "Blockchain-verified XRP transaction scanner for missing DestinationTags and Memos",
+        "endpoints": {
+            "scan": {
+                "url": "/api/scan",
+                "method": "POST",
+                "description": "Standard wallet scan with limit"
+            },
+            "large_scan": {
+                "url": "/api/scan/large",
+                "method": "POST",
+                "description": "Extreme depth scan (supports 100M+ transactions)"
+            },
+            "status": {
+                "url": "/api/scan/status/{scan_id}",
+                "method": "GET",
+                "description": "Get scan progress and status"
+            },
+            "files": {
+                "url": "/api/files/{filename}",
+                "method": "GET",
+                "description": "Download generated files"
+            },
+            "view_file": {
+                "url": "/api/files/view/{filename}",
+                "method": "GET",
+                "description": "View file contents in browser"
+            },
+            "file_explorer": {
+                "url": "/api/files/explorer/{scan_id}",
+                "method": "GET",
+                "description": "Browse all files for a scan"
+            },
+            "batch_files": {
+                "url": "/api/files/batch/{scan_id}",
+                "method": "GET",
+                "description": "Get all batch CSV files"
+            },
+            "live_explorer": {
+                "url": "/api/explorer/live/{scan_id}",
+                "method": "GET",
+                "description": "Real-time scan monitoring page"
+            },
+            "history": {
+                "url": "/api/scan/history/{wallet}",
+                "method": "GET",
+                "description": "Get scan history for wallet"
+            },
+            "analytics": {
+                "url": "/api/analytics/summary",
+                "method": "GET",
+                "description": "Get analytics summary"
+            },
+            "logs": {
+                "url": "/api/logs",
+                "method": "GET",
+                "description": "Get recent scan logs"
+            },
+            "validate": {
+                "url": "/api/scan/validate",
+                "method": "POST",
+                "description": "Validate wallet address"
+            },
+            "test": {
+                "url": "/api/test",
+                "method": "GET",
+                "description": "Test API connectivity"
+            }
+        },
+        "validation_method": "Blockchain-level verification (XRP Ledger)",
+        "supported_depths": ["1K", "5K", "10K", "20K", "30K", "40K", "50K", "60K", "70K", "80K", "90K", "100K", "500K", "1M", "5M", "10M", "50M", "100M", "FULL"],
+        "data_directory": DATA_DIR,
+        "documentation": "https://github.com/johnsteven1/XRP-SCAN-",
+        "frontend_url": f"http://localhost:{FRONTEND_PORT}" if FRONTEND_PORT else None
+    })
+
 @app.route('/api/scan', methods=['POST', 'OPTIONS'])
 def scan_wallet():
     """Standard scan with limit"""
