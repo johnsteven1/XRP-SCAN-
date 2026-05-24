@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import requests
 from requests.adapters import HTTPAdapter
@@ -131,13 +131,54 @@ PORT = int(os.environ.get('PORT', 5000))
 # ==================== FRONTEND CONFIGURATION ====================
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Frontend directory - assuming it's in the same parent directory or alongside
-FRONTEND_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), 'frontend') if os.path.exists(os.path.join(os.path.dirname(SCRIPT_DIR), 'frontend')) else os.path.join(SCRIPT_DIR, 'frontend')
+# Frontend directory - look in multiple possible locations
+possible_frontend_paths = [
+    os.path.join(SCRIPT_DIR, 'frontend'),  # Same directory
+    os.path.join(os.path.dirname(SCRIPT_DIR), 'frontend'),  # Parent directory
+    os.path.join(SCRIPT_DIR, '..', 'frontend'),  # One level up
+    os.path.join(SCRIPT_DIR, 'static', 'frontend'),  # Static subdirectory
+]
+
+FRONTEND_DIR = None
+for path in possible_frontend_paths:
+    if os.path.exists(path) or os.path.exists(os.path.dirname(path)):
+        FRONTEND_DIR = path
+        break
+
+if not FRONTEND_DIR:
+    FRONTEND_DIR = os.path.join(SCRIPT_DIR, 'frontend')
+
 FRONTEND_PORT = int(os.environ.get('FRONTEND_PORT', 8000))
 BACKEND_URL = os.environ.get('BACKEND_URL', f'http://localhost:{PORT}')
 
 # Ensure frontend directory exists
 os.makedirs(FRONTEND_DIR, exist_ok=True)
+# ===========================================================
+
+# ==================== SERVE FRONTEND DIRECTLY ====================
+@app.route('/frontend/<path:filename>')
+def serve_frontend_file(filename):
+    """Serve frontend files from /frontend directory"""
+    safe_path = os.path.normpath(filename).lstrip('/')
+    if '..' in safe_path or safe_path.startswith('..'):
+        return jsonify({"error": "Invalid path"}), 403
+    
+    file_path = os.path.join(FRONTEND_DIR, safe_path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return send_file(file_path)
+    return jsonify({"error": "File not found"}), 404
+
+@app.route('/frontend/')
+@app.route('/frontend/index.html')
+def serve_frontend_index():
+    """Serve the frontend index.html file"""
+    index_path = os.path.join(FRONTEND_DIR, 'index.html')
+    if os.path.exists(index_path):
+        return send_file(index_path)
+    # Create default index if not exists
+    create_frontend_index_html()
+    return send_file(index_path)
+
 # ===========================================================
 
 # Configuration
@@ -919,8 +960,7 @@ def large_scan_worker(wallet_address, scan_id, max_transactions=None, callback=N
                 active_scans[scan_id]['downloads'] = generated_files
                 active_scans[scan_id]['live_files'] = final_live_files
                 active_scans[scan_id]['latest_batch_file'] = final_live_files[0] if final_live_files else None
-                active_scans[scan_id]['progress'] = 100
-        
+                active_scans[scan_id]['progress'] = 100        
         log_entry = {
             'scan_id': scan_id,
             'wallet': wallet_address,
@@ -2445,16 +2485,19 @@ if __name__ == '__main__':
     print("✅ File explorer")
     print("✅ CSV batch exports")
     
-    # Create frontend files and start server
+    # Create frontend files
     create_frontend_index_html()
-    start_frontend()
+    
+    # Start frontend server if not on Render (Render serves static files differently)
+    if not os.environ.get('RENDER'):
+        start_frontend()
     
     frontend_url = get_frontend_url()
     backend_url = get_backend_url()
     
     print("\n" + "="*60)
     print("✅ XRP Wallet Scanner is running!")
-    print(f"📱 Frontend UI: {frontend_url}")
+    print(f"📱 Frontend UI: {frontend_url}/frontend/")
     print(f"🔧 Backend API: {backend_url}")
     print(f"📄 API Documentation: {backend_url}")
     print("\nPress Ctrl+C to stop both servers")
@@ -2465,5 +2508,6 @@ if __name__ == '__main__':
         app.run(debug=False, host='0.0.0.0', port=PORT)
     except KeyboardInterrupt:
         print("\n🛑 Shutting down...")
-        stop_frontend()
+        if not os.environ.get('RENDER'):
+            stop_frontend()
         print("✅ All servers stopped")
